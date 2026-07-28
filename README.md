@@ -1,19 +1,16 @@
 # want-to-sleep
 
+<p align="center">
+  <a href="#install">install</a> · <a href="#the-sidebar">sidebar</a> · <a href="#how-it-decides">how it decides</a> · <a href="#blocked-agents">blocked agents</a> · <a href="#configuration">config</a> · <a href="#limitations">limitations</a>
+</p>
+
 A sleep watch for [herdr](https://herdr.dev). Hand your agents the night's work,
-arm it, and go to bed. It waits until herdr reports that none of them is working
-any more, then sleeps the Mac and writes down what each one was doing.
+start the watch, and go to bed. It waits until none of them is working any more,
+sleeps the Mac, and writes down what each one was doing.
 
-```
-prefix+shift+s          →  Sleep armed · 3 working · 0 blocked · 1 settled
-                           …
-                           Every agent has settled — sleep in 2 min.
-```
-
-The problem it solves is small and specific: an agent started at midnight might
-finish in twenty minutes or in four hours, and you cannot know which. Without
-something watching, the choice is to sit and wait, or to leave the machine on
-until morning.
+An agent started at midnight might finish in twenty minutes or in four hours,
+and you cannot know which. Without something watching, the choice is to sit and
+wait, or to leave the machine on until morning.
 
 ## Install
 
@@ -21,57 +18,66 @@ until morning.
 herdr plugin install scheron/herdr-want-to-sleep
 ```
 
-Then bind a key in `~/.config/herdr/config.toml` — herdr 0.7 does not bind keys
-declared by a plugin:
+Bind a key in `~/.config/herdr/config.toml` — herdr 0.7 does not bind keys
+declared by a plugin — then `herdr server reload-config`:
 
 ```toml
 [[keys.command]]
 key = "prefix+shift+s"
 type = "plugin_action"
 command = "scheron.want-to-sleep.toggle"
-description = "Sleep once every agent has settled"
+description = "want-to-sleep sidebar"
 ```
 
-```sh
-herdr server reload-config
-```
+Needs `jq`. macOS only: sleeping and idle detection are `pmset` and
+`IOHIDSystem`.
 
-Requires `jq`. macOS only for now — the watch logic is portable, but sleeping
-and idle detection are `pmset` and `IOHIDSystem`.
+## The sidebar
+
+The key toggles a split pane with the live watch state, every agent herdr can
+see, and the rules it is applying.
+
+| Key | Does |
+|---|---|
+| `a` | Start watching |
+| `c` | Stop watching, leave the pane open |
+| `-` `+` | Quiet needed before sleeping, in 5 min steps |
+| `q` | Stop watching and close the pane |
+| `x` | Close the pane, **keep watching** |
+
+The watcher is a detached process, so `x` is the normal way out: close the pane,
+reclaim the space, go to bed. Only `q` and `c` stop it.
 
 ## How it decides
 
-Powering down is easy. Knowing the agents are actually done is not, and this is
-where a naive version gets it wrong. Five conditions have to hold at once:
+Powering down is easy; knowing the agents are done is not. Four things have to
+hold at once.
 
-**Nothing is working.** `herdr agent list` reports every agent as `working`,
-`idle`, `blocked`, `done`, or `unknown`. This is the signal the plugin exists to
-use — an individual agent's own "I finished responding" event cannot tell you
-whether it finished or merely stopped to ask a question, and with several agents
-running, the first one to go quiet says nothing about the rest.
+**Nothing is working.** `herdr agent list` reports each agent as `working`,
+`idle`, `blocked`, `done` or `unknown`. This is the signal the plugin exists to
+use — an agent's own "finished responding" event cannot tell you whether it
+finished or merely stopped to ask a question, and with several agents running,
+the first to go quiet says nothing about the rest.
 
-**It has stayed that way.** Settledness has to hold continuously for the
-configured number of minutes. An agent that pauses ten seconds between tool
-calls must not read as finished, so a single `working` reading resets the clock
-to zero.
+**It has stayed that way.** The quiet must hold unbroken for the configured
+minutes. An agent pausing ten seconds between tool calls must not read as
+finished, so a single `working` reading resets the timer to zero.
 
 **You are away.** `HIDIdleTime` must exceed five minutes, so the machine never
-sleeps out from under you while you are sitting at it. The same check runs
-during the countdown — touch anything and it cancels.
+sleeps out from under you. The same check runs during the two-minute countdown —
+touch anything and it cancels.
 
-**Inside the window, if you set one.** An optional `HH:MM-HH:MM` window that
-wraps past midnight. Outside it, nothing fires.
+**Inside the window, if you set one.** An optional `HH:MM-HH:MM` that wraps past
+midnight.
 
-**Still armed.** Deleting the state file stops everything within one poll, and
-the watch disarms itself after 12 hours so a forgotten arm cannot fire into the
-next evening.
+The watch also disarms itself after 12 hours, so a forgotten start cannot fire
+into the next evening.
 
 ## Blocked agents
 
-An agent in `blocked` is waiting on a human. At 3am that answer is not coming,
-so by default a blocked agent counts as settled rather than as a reason to keep
-the machine awake — and the journal says so loudly, because a blocked agent did
-not finish its work:
+A `blocked` agent is waiting on a human. At 3am that answer is not coming, so by
+default it counts as quiet rather than as a reason to keep the machine awake —
+and the journal says so, because a blocked agent did not finish its work:
 
 ```markdown
 ## 2026-07-29 03:34 — sleep
@@ -84,59 +90,60 @@ not finish its work:
 > 1 agent(s) were blocked waiting for input. They did not finish.
 ```
 
-If you would rather stay awake for them, set `blocked = wait`.
+Set `blocked = wait` to stay awake for them instead.
 
 ## Configuration
 
 `herdr plugin config-dir scheron.want-to-sleep` prints the directory; put a
-`config` file there:
+`config` file there.
 
-```ini
-minutes = 20            # how long everything must stay settled
-action = sleep          # sleep | shutdown
-window =                # e.g. 23:00-09:00, empty means any hour
-idle_seconds = 300      # keyboard must be untouched this long
-grace_seconds = 120     # cancellable countdown before powering down
-blocked = settle        # settle | wait
-```
+| Key | Default | Means |
+|---|---|---|
+| `minutes` | `15` | How long the quiet must hold |
+| `action` | `sleep` | `sleep` or `shutdown` |
+| `window` | *(empty)* | e.g. `23:00-09:00`, empty means any hour |
+| `idle_seconds` | `300` | Keyboard untouched this long |
+| `grace_seconds` | `120` | Cancellable countdown |
+| `blocked` | `settle` | `settle` or `wait` |
+| `placement` | `split` | `split`, `tab`, `overlay`, `zoomed` |
+| `direction` | `right` | Split side |
 
-`shutdown` goes through System Events, so it needs no password — but an app
-holding an unsaved document can veto it. `sleep` cannot be vetoed, which is why
-it is the default.
+`shutdown` is deliberately not reachable from the sidebar: it is rarer and
+riskier than sleep, and a one-key toggle beside the others invited mistakes. It
+goes through System Events, so it needs no password — but an app holding an
+unsaved document can veto it. Sleep cannot be vetoed.
 
 ## From a shell
 
-`herdr/wts.sh` is self-contained and takes the same arguments:
+`herdr/wts.sh` is self-contained and shares the plugin's state, so the CLI and
+the sidebar always agree:
 
 ```sh
-wts.sh arm                       # use the config defaults
-wts.sh arm 45 shutdown           # override for this one night
 wts.sh arm 20 sleep 23:00-09:00
 wts.sh disarm
 wts.sh status
 wts.sh journal
 ```
 
-To arm every night without thinking about it, point a `launchd` calendar job at
-`herdr plugin action invoke scheron.want-to-sleep.arm` and give the config a
-`window` so a late finish cannot sleep the machine after you sit back down.
+To start it every night, point a `launchd` calendar job at
+`herdr plugin action invoke scheron.want-to-sleep.arm`, and set a `window` so a
+late finish cannot sleep the machine after you sit back down.
 
 ## Actions
 
-| Action | Does |
-|---|---|
-| `scheron.want-to-sleep.toggle` | Arm, or cancel if already armed |
-| `scheron.want-to-sleep.arm` | Arm the watch |
-| `scheron.want-to-sleep.disarm` | Cancel |
-| `scheron.want-to-sleep.status` | Report what the watch currently sees |
+`toggle`, `open` and `close` drive the sidebar; `arm`, `disarm` and `status`
+drive the watch headlessly, each reporting through a notification.
 
 ## Limitations
 
-- macOS only. Linux needs a different sleep call and a different idle source.
-- Agents herdr reports as `unknown` are not counted as working. A pane herdr
+- macOS only. Linux needs a different sleep call and idle source.
+- Agents herdr reports as `unknown` are not counted as working, so a pane it
   cannot classify will not hold the machine awake.
-- The countdown cancels on keyboard input, not on an agent waking back up. If an
-  agent starts working during those two minutes, it is interrupted by the sleep.
+- The countdown cancels on keyboard input, not on an agent waking back up. An
+  agent that starts working during those two minutes is interrupted.
+- With `[ui.toast] delivery = "off"` herdr suppresses its own toasts, so
+  notifications are mirrored to macOS Notification Center — otherwise the
+  warning before sleeping would be silent.
 
 ## License
 

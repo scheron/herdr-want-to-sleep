@@ -6,11 +6,18 @@
 # `herdr plugin log`.
 set -uo pipefail
 
+# herdr runs plugin commands with a minimal PATH; make sure jq resolves.
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
+
 HERDR_BIN="${HERDR_BIN_PATH:-herdr}"
 WTS="$(cd "$(dirname "$0")" && pwd)/wts.sh"
 
 toast() {
-  "$HERDR_BIN" notification show "$1" --body "$2" --sound "${3:-none}" >/dev/null 2>&1 || true
+  local body="${2//\"/}"
+  "$HERDR_BIN" notification show "$1" --body "$2" --sound "${3:-none}" >/dev/null 2>&1
+  command -v osascript >/dev/null 2>&1 \
+    && osascript -e "display notification \"$body\" with title \"$1\"" >/dev/null 2>&1
+  return 0
 }
 
 [ -r "$WTS" ] || { toast "want-to-sleep" "wts.sh is missing from the plugin root" request; exit 1; }

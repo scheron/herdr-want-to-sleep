@@ -4,6 +4,9 @@
 # polling it — re-attach, and only then.
 set -uo pipefail
 
+# herdr runs plugin commands with a minimal PATH; make sure jq resolves.
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
+
 WTS="$(cd "$(dirname "$0")" && pwd)/wts.sh"
 PLUGIN_ID="${HERDR_PLUGIN_ID:-scheron.want-to-sleep}"
 STATE_DIR="${HERDR_PLUGIN_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/herdr/plugins/$PLUGIN_ID}"

@@ -14,6 +14,9 @@
 
 set -uo pipefail
 
+# herdr runs plugin commands with a minimal PATH; make sure jq resolves.
+export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
+
 HERDR_BIN="${HERDR_BIN_PATH:-herdr}"
 
 # Fall back to the exact paths herdr itself would hand us, so that running this
@@ -80,10 +83,15 @@ in_window() {
   fi
 }
 
+# Both channels, always — not one as a fallback for the other. `notification
+# show` still exits 0 when the user has set [ui.toast] delivery = "off", so a
+# fallback keyed on its exit status goes silent exactly when it matters most:
+# the two-minute warning before the machine sleeps.
 notify() {
-  "$HERDR_BIN" notification show "$1" --body "$2" --sound "${3:-none}" >/dev/null 2>&1 && return 0
+  local body="${2//\"/}"
+  "$HERDR_BIN" notification show "$1" --body "$2" --sound "${3:-none}" >/dev/null 2>&1
   command -v osascript >/dev/null 2>&1 \
-    && osascript -e "display notification \"$2\" with title \"$1\"" >/dev/null 2>&1
+    && osascript -e "display notification \"$body\" with title \"$1\"" >/dev/null 2>&1
   return 0
 }
 
@@ -186,7 +194,7 @@ check() {
 
 cmd_arm() {
   local minutes action window arg
-  minutes=$(cfg minutes 20); action=$(cfg action sleep); window=$(cfg window "")
+  minutes=$(cfg minutes 15); action=$(cfg action sleep); window=$(cfg window "")
   for arg in "$@"; do
     case "$arg" in
       *[!0-9]*)

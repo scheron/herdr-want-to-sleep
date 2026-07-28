@@ -2,9 +2,11 @@
 #   herdr plugin config-dir scheron.want-to-sleep
 # and name it `config`.
 
-minutes = 20            # how long everything must stay settled
-action = sleep          # sleep | shutdown
+minutes = 15            # how long the quiet must hold, unbroken
+action = sleep          # sleep | shutdown  (not reachable from the sidebar)
 window =                # e.g. 23:00-09:00, empty means any hour
-idle_seconds = 300      # keyboard must be untouched this long
+idle_seconds = 300      # keyboard untouched this long
 grace_seconds = 120     # cancellable countdown before powering down
 blocked = settle        # settle | wait
+placement = split       # split | tab | overlay | zoomed
+direction = right       # split side
