@@ -59,9 +59,24 @@ use — an agent's own "finished responding" event cannot tell you whether it
 finished or merely stopped to ask a question, and with several agents running,
 the first to go quiet says nothing about the rest.
 
+Only `working` keeps the machine awake:
+
+| State | Means | Keeps it awake? |
+|---|---|---|
+| `working` | actually working | **yes** — and resets the timer to zero |
+| `done` | finished its task | no |
+| `idle` | waiting for its next prompt | no |
+| `blocked` | waiting on **you** | no by default — see below |
+| `unknown` | herdr could not classify the pane | no |
+
+`unknown` not holding the machine awake is a deliberate trade: otherwise one
+pane herdr cannot read would keep it running forever. The cost is that a genuinely
+busy agent herdr fails to classify would be slept on.
+
 **It has stayed that way.** The quiet must hold unbroken for the configured
-minutes. An agent pausing ten seconds between tool calls must not read as
-finished, so a single `working` reading resets the timer to zero.
+minutes — fifteen continuous minutes, not fifteen minutes of quiet added up. An
+agent that goes quiet for a minute and picks the work back up sends the timer to
+zero, so a pause between tool calls can never read as finished.
 
 **You are away.** `HIDIdleTime` must exceed five minutes, so the machine never
 sleeps out from under you. The same check runs during the two-minute countdown —
