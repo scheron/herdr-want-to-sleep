@@ -5,7 +5,8 @@
 set -uo pipefail
 
 WTS="$(cd "$(dirname "$0")" && pwd)/wts.sh"
-STATE_DIR="${HERDR_PLUGIN_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/want-to-sleep}"
+PLUGIN_ID="${HERDR_PLUGIN_ID:-scheron.want-to-sleep}"
+STATE_DIR="${HERDR_PLUGIN_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/herdr/plugins/$PLUGIN_ID}"
 
 [ -f "$STATE_DIR/armed.json" ] || exit 0
 pgrep -f "$WTS watch" >/dev/null 2>&1 && exit 0

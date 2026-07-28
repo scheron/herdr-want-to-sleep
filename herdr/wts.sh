@@ -16,8 +16,12 @@ set -uo pipefail
 
 HERDR_BIN="${HERDR_BIN_PATH:-herdr}"
 
-STATE_DIR="${HERDR_PLUGIN_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/want-to-sleep}"
-CONFIG_DIR="${HERDR_PLUGIN_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/want-to-sleep}"
+# Fall back to the exact paths herdr itself would hand us, so that running this
+# script from a shell and pressing the keybinding drive the same state. Anything
+# else lets the CLI report "not armed" while the plugin's watcher is running.
+PLUGIN_ID="${HERDR_PLUGIN_ID:-scheron.want-to-sleep}"
+STATE_DIR="${HERDR_PLUGIN_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/herdr/plugins/$PLUGIN_ID}"
+CONFIG_DIR="${HERDR_PLUGIN_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/herdr/plugins/config/$PLUGIN_ID}"
 STATE="$STATE_DIR/armed.json"
 JOURNAL="$STATE_DIR/journal.md"
 CONFIG="$CONFIG_DIR/config"
