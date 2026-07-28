@@ -106,12 +106,21 @@ agents_block() {
 
 key() { printf '%s%s%s%s %s%s%s' "$B" "$BLUE" "$1" "$R" "$TEXT" "$2" "$R"; }
 
+# Centre on the visible width: the colour escapes are bytes the terminal never
+# draws, so measuring the raw string would push the line off to the left.
+centre() {
+  local s="$1" plain pad
+  plain=$(printf '%s' "$s" | sed "s/${ESC}\[[0-9;?]*[a-zA-Z]//g")
+  pad=$(( ( $(cols) - ${#plain} ) / 2 ))
+  [ "$pad" -lt 0 ] && pad=0
+  printf '%*s%s' "$pad" '' "$s"
+}
+
 keys_block() {
-  printf '  '
-  if armed; then key c "stop"; else key a "start"; fi
-  printf '   '; key "-/+" "quiet time"
-  printf '   '; key x "close, keep watching"
-  printf '   '; key q "stop and close"
+  local s
+  if armed; then s="$(key c stop)"; else s="$(key a start)"; fi
+  s="$s   $(key '-/+' 'quiet time')   $(key x 'close, keep watching')   $(key q 'stop and close')"
+  centre "$s"
 }
 
 rule() {
