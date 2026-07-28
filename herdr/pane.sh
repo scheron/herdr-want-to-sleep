@@ -23,6 +23,7 @@ ESC=$'\033'
 DIM="${ESC}[2m"; B="${ESC}[1m"; R="${ESC}[0m"
 GREEN="${ESC}[38;5;114m"; YELLOW="${ESC}[38;5;179m"
 RED="${ESC}[38;5;174m"; GREY="${ESC}[38;5;245m"
+BLUE="${ESC}[38;5;111m"; TEXT="${ESC}[38;5;252m"
 
 cleanup() { printf '%s[?25h' "$ESC"; }
 trap cleanup EXIT INT TERM
@@ -30,8 +31,11 @@ trap cleanup EXIT INT TERM
 armed() { [ -f "$STATE" ]; }
 sget() { jq -r "$1 // empty" "$STATE" 2>/dev/null; }
 
-cols() { local c; c=$(tput cols 2>/dev/null) || c=60; [ "${c:-0}" -ge 24 ] || c=60; printf '%s' "$c"; }
-rows() { local r; r=$(tput lines 2>/dev/null) || r=40; [ "${r:-0}" -ge 10 ] || r=40; printf '%s' "$r"; }
+# stty reads the pty window size directly. terminfo reported a stale 24 rows in
+# a herdr split, which collapsed the bottom padding to nothing.
+term_size() { stty size </dev/tty 2>/dev/null || printf '40 80'; }
+rows() { local r; r=$(term_size | cut -d' ' -f1); [ "${r:-0}" -ge 10 ] || r=40; printf '%s' "$r"; }
+cols() { local c; c=$(term_size | cut -d' ' -f2); [ "${c:-0}" -ge 24 ] || c=80; printf '%s' "$c"; }
 
 # Wrap prose to the pane's real width instead of baking line breaks into the
 # text, which left the legend in a narrow column no matter how wide the split.
@@ -100,17 +104,20 @@ agents_block() {
       done
 }
 
+key() { printf '%s%s%s%s %s%s%s' "$B" "$BLUE" "$1" "$R" "$TEXT" "$2" "$R"; }
+
 keys_block() {
-  local m
-  if armed; then m=$(sget .minutes); else m="$MIN"; fi
+  printf '  '
+  if armed; then key c "stop"; else key a "start"; fi
+  printf '   '; key "-/+" "quiet time"
+  printf '   '; key x "close, keep watching"
+  printf '   '; key q "stop and close"
+}
+
+rule() {
   printf '  %s' "$DIM"
-  if armed; then
-    printf 'c    stop watching\n'
-  else
-    printf 'a    start watching\n'
-  fi
-  printf '  -/+  quiet needed before sleeping — now %s min\n' "$m"
-  printf '  q    stop and close        x    close, keep watching%s' "$R"
+  awk -v n="$(( $(cols) - 4 ))" 'BEGIN { while (i++ < n) printf "─" }'
+  printf '%s' "$R"
 }
 
 legend_block() {
@@ -129,18 +136,25 @@ legend_block() {
   printf '%s' "$R"
 }
 
+# Redraw without clearing. A full ESC[2J leaves a blank frame on screen until
+# the next write lands, which reads as a flicker every poll; overwriting each
+# line and erasing to its end, then erasing what is left below, never blanks.
+# ESC[?2026h/l asks terminals that support it to show the frame atomically.
 draw() {
-  local body legend pad
-  body="$(status_block)"$'\n\n'"$(agents_block)"$'\n\n'"$(keys_block)"
-  legend="$(legend_block)"
-  pad=$(( $(rows) - $(printf '%s\n' "$body" | wc -l) - $(printf '%s\n' "$legend" | wc -l) - 2 ))
+  local body footer pad
+  body="$(status_block)"$'\n\n'"$(agents_block)"
+  footer="$(keys_block)"$'\n'"$(rule)"$'\n\n'"$(legend_block)"
+  pad=$(( $(rows) - $(printf '%s\n' "$body" | wc -l) - $(printf '%s\n' "$footer" | wc -l) - 3 ))
   [ "$pad" -lt 1 ] && pad=1
 
-  printf '%s[H%s[2J%s[?25l' "$ESC" "$ESC" "$ESC"
-  printf '\n'
-  printf '%s\n' "$body"
-  printf '%*s' "$pad" '' | tr ' ' '\n'
-  printf '%s\n' "$legend"
+  printf '%s[?2026h%s[H%s[?25l' "$ESC" "$ESC" "$ESC"
+  {
+    printf '\n\n'
+    printf '%s\n' "$body"
+    printf '%*s' "$pad" '' | tr ' ' '\n'
+    printf '%s\n' "$footer"
+  } | awk -v e="$ESC" '{ printf "%s%s[K\n", $0, e }'
+  printf '%s[J%s[?2026l' "$ESC" "$ESC"
 }
 
 while true; do
