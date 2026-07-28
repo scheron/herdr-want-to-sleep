@@ -1,0 +1,48 @@
+id = "scheron.want-to-sleep"
+name = "want-to-sleep"
+version = "0.1.0"
+min_herdr_version = "0.7.0"
+platforms = ["macos"]
+description = "Arm it before bed. It waits until herdr reports that no agent is working any more, sleeps the Mac, and journals what every agent was doing — including the ones that ended up blocked."
+
+# Actions are run by the herdr server WITHOUT a TTY, so each one reports back
+# through `herdr notification show` rather than stdout. All of them are thin
+# wrappers over herdr/wts.sh, which is also usable on its own from a shell.
+
+[[actions]]
+id = "toggle"
+title = "want-to-sleep: arm or cancel the sleep watch"
+contexts = ["pane", "workspace"]
+command = ["bash", "herdr/action.sh", "toggle"]
+
+[[actions]]
+id = "arm"
+title = "want-to-sleep: sleep once every agent has settled"
+contexts = ["pane", "workspace"]
+command = ["bash", "herdr/action.sh", "arm"]
+
+[[actions]]
+id = "disarm"
+title = "want-to-sleep: cancel the sleep watch"
+contexts = ["pane", "workspace"]
+command = ["bash", "herdr/action.sh", "disarm"]
+
+[[actions]]
+id = "status"
+title = "want-to-sleep: what the watch sees right now"
+contexts = ["pane", "workspace"]
+command = ["bash", "herdr/action.sh", "status"]
+
+# The watcher is a detached process, so a server restart can leave an armed
+# state file behind with nothing polling it. Re-attach on startup.
+[[startup]]
+command = ["bash", "herdr/startup.sh"]
+
+# herdr 0.7 does not bind keys declared in a manifest. Bind one yourself in
+# ~/.config/herdr/config.toml, then `herdr server reload-config`:
+#
+#   [[keys.command]]
+#   key = "prefix+shift+s"
+#   type = "plugin_action"
+#   command = "scheron.want-to-sleep.toggle"
+#   description = "Sleep once every agent has settled"

@@ -1,0 +1,10 @@
+# Copy to the directory printed by:
+#   herdr plugin config-dir scheron.want-to-sleep
+# and name it `config`.
+
+minutes = 20            # how long everything must stay settled
+action = sleep          # sleep | shutdown
+window =                # e.g. 23:00-09:00, empty means any hour
+idle_seconds = 300      # keyboard must be untouched this long
+grace_seconds = 120     # cancellable countdown before powering down
+blocked = settle        # settle | wait
